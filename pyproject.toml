@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=67", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "colbert-wiki17-service"
+version = "0.1.0"
+description = "FastAPI wrapper and tooling for a ColBERTv2 index built from Wikipedia 2017 abstracts."
+authors = [{ name = "Vincent Koc" }]
+license = { text = "MIT" }
+requires-python = ">=3.9"
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "colbert-ai>=0.2.19",
+    "datasets>=2.17",
+    "requests>=2.31",
+]
+
+[project.optional-dependencies]
+dspy = ["dspy-ai>=2.4"]
+deploy = ["huggingface_hub>=0.20"]
+
+[project.urls]
+homepage = "https://huggingface.co/colbert-ir/colbertv2.0"
+repository = "https://github.com/vincentkoc/Colbertv2-Wiki17-Abstracts-Image"
+
+[tool.setuptools.package-dir]
+= ""
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app", "dspy_adapter", "scripts"]
+
+[tool.isort]
+profile = "black"
+
+[tool.black]
+line-length = 100
