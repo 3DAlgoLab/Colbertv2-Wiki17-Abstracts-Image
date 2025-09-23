@@ -19,7 +19,7 @@ import json
 import logging
 import tarfile
 from pathlib import Path
-from typing import Iterable, Iterator, Tuple
+from typing import Iterator
 
 import requests
 from datasets import load_dataset
@@ -55,24 +55,16 @@ def download_archive(url: str, dest: Path) -> None:
     LOGGER.info("Saved archive to %s", dest)
 
 
-def iter_rows_from_archive(archive_path: Path) -> Tuple[Iterator[dict], Iterator[str]]:
+def iter_rows_from_archive(archive_path: Path) -> Iterator[dict]:
     if not archive_path.exists():
         raise FileNotFoundError(f"Archive not found: {archive_path}")
 
     LOGGER.info("Loading documents from archive %s", archive_path)
-    tar = tarfile.open(archive_path, "r:gz")
+    with tarfile.open(archive_path, "r:gz") as tar:
+        tsv_member = next((m for m in tar.getmembers() if m.name.endswith("collection.tsv")), None)
+        if tsv_member is None:
+            raise FileNotFoundError("collection.tsv not found inside archive")
 
-    # Attempt to locate the TSV payload within the archive.
-    tsv_member = None
-    for member in tar.getmembers():
-        if member.name.endswith("collection.tsv"):
-            tsv_member = member
-            break
-    if tsv_member is None:
-        tar.close()
-        raise FileNotFoundError("collection.tsv not found inside archive")
-
-    def row_iterator() -> Iterator[dict]:
         with tar.extractfile(tsv_member) as handle:
             if handle is None:
                 raise RuntimeError("Failed to extract collection.tsv from archive")
@@ -86,28 +78,8 @@ def iter_rows_from_archive(archive_path: Path) -> Tuple[Iterator[dict], Iterator
                     doc_id, text = str(idx), line
                 yield {"id": doc_id, "text": text}
 
-        tar.close()
 
-    def text_iterator() -> Iterator[str]:
-        with tarfile.open(archive_path, "r:gz") as alt_tar:
-            member = None
-            for candidate in alt_tar.getmembers():
-                if candidate.name.endswith("collection.tsv"):
-                    member = candidate
-                    break
-            if member is None:
-                raise FileNotFoundError("collection.tsv not found inside archive")
-            with alt_tar.extractfile(member) as handle:
-                if handle is None:
-                    raise RuntimeError("Failed to extract collection.tsv from archive")
-                for raw_line in handle:
-                    line = raw_line.decode("utf-8", errors="replace")
-                    yield line.strip().replace("\n", " ")
-
-    return row_iterator(), text_iterator()
-
-
-def write_outputs(rows: Iterable[dict], texts: Iterable[str], jsonl_path: Path, text_path: Path) -> int:
+def write_outputs(rows: Iterator[dict], jsonl_path: Path, text_path: Path) -> int:
     jsonl_path.parent.mkdir(parents=True, exist_ok=True)
     text_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -117,8 +89,7 @@ def write_outputs(rows: Iterable[dict], texts: Iterable[str], jsonl_path: Path, 
     ) as text_stream:
         for count, row in enumerate(rows, start=1):
             jsonl_stream.write(json.dumps(row, ensure_ascii=False) + "\n")
-        for text in texts:
-            text_stream.write(text + "\n")
+            text_stream.write(row["text"].replace("\n", " ").strip() + "\n")
     return count
 
 
@@ -182,8 +153,6 @@ def main() -> None:
         )
         dataset = load_dataset(args.dataset, split=args.split, streaming=False)
         rows = iter_rows_from_huggingface(dataset, args.id_column, args.text_column)
-        texts = (row["text"].replace("\n", " ") for row in rows)
-        rows = iter_rows_from_huggingface(dataset, args.id_column, args.text_column)
     else:
         archive_path = args.archive_path
         if archive_path is None:
@@ -195,10 +164,10 @@ def main() -> None:
         else:
             LOGGER.info("Archive already present at %s; skipping download", archive_path)
 
-        rows, texts = iter_rows_from_archive(archive_path)
+        rows = iter_rows_from_archive(archive_path)
 
     LOGGER.info("Writing outputs to %s", args.output_dir)
-    count = write_outputs(rows, texts, jsonl_path=jsonl_path, text_path=text_path)
+    count = write_outputs(rows, jsonl_path=jsonl_path, text_path=text_path)
 
     LOGGER.info("Preparation complete: %d documents", count)
 
