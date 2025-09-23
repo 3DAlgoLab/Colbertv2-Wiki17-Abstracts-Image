@@ -33,12 +33,14 @@ pip install torch --index-url https://download.pytorch.org/whl/cpu
 pip install -e .
 ```
 
-Download the corpus and build the index:
+Download the corpus (Baleen mirror) and build the index:
 
 ```bash
-python scripts/download_wiki17_abstracts.py --output-dir data/raw/wiki17
+python scripts/download_wiki17_abstracts.py --source archive --output-dir data/raw/wiki17
 python scripts/build_index.py --collection data/raw/wiki17/collection.tsv --index-root data/index --index-name wiki17_abstracts
 ```
+
+Pass `--source huggingface` if you prefer to pull the corpus via Hugging Face Datasets instead of the Baleen archive.
 
 Launch the API (defaults to port 8000):
 
@@ -86,25 +88,33 @@ docker run --rm -p 8000:8000 colbertv2-wiki17
 
 ### Customising the Build
 
-- `--build-arg DATASET_NAME="namespace/dataset"` switches to a different Hugging Face corpus.
+- `--build-arg ARCHIVE_URL="https://example.com/wiki.abstracts.2017.tar.gz"` to point the build at an alternate mirror.
 - `--build-arg DEFAULT_K=20` adjusts the server default for `k` when clients omit it.
 
 To persist the index outside the container, you can mount a volume at `/workspace/data`.
 
 ## Publishing to Hugging Face
 
-1. Create a private or public repository on the Hugging Face hub (dataset or space).
-2. Use `huggingface_hub` with a write token to upload artifacts:
+1. Mirror the Baleen archive once so future builds pull from the Hugging Face Hub instead of Stanford servers:
 
    ```bash
    pip install huggingface_hub
    python -m huggingface_hub login
-   huggingface-cli upload <your-namespace>/<repo-name> data/index/wiki17_abstracts ./data/index/wiki17_abstracts
+   huggingface-cli upload <your-namespace>/<repo-name> data/raw/wiki17/wiki.abstracts.2017.tar.gz wiki.abstracts.2017.tar.gz --repo-type dataset
+   ```
+
+   Update `ARCHIVE_URL` (or set `COLBERT_ARCHIVE_URL` when running locally) to point at the new mirror, e.g. `https://huggingface.co/datasets/<your-namespace>/<repo-name>/resolve/main/wiki.abstracts.2017.tar.gz`.
+
+2. Upload the ColBERT index and metadata with the provided helper:
+
+   ```bash
+   pip install .[deploy]
+   python scripts/push_to_hf.py <your-namespace>/<repo-name> --repo-type dataset
    ```
 
 3. For Spaces, point the Space to this repository and set the runtime to Docker; the
-   provided `Dockerfile` works out-of-the-box.  Store any required HF tokens in the Space
-   secrets and set `DATASET_NAME` if you prefer a hosted dataset variant.
+   provided `Dockerfile` works out-of-the-box.  Store the Hugging Face token and override
+   `ARCHIVE_URL` as needed via Space secrets.
 
 ## Project Layout
 
