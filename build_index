@@ -1,0 +1,4 @@
+
+#!/bin/bash
+rm -rf data/index
+uv run scripts/build_index.py --collection data/raw/wiki17/collection_fixed.tsv --index-root data/index --index-name wiki17_abstracts

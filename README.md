@@ -20,10 +20,23 @@ self-hosted endpoint with minimal changes.
 - Python 3.10+
 - PyTorch-compatible hardware (GPU optional; the provided Dockerfile defaults to CPU)
 - Hugging Face account (optional) if you want to publish the resulting index/image
+- uv (recommended) for fast dependency management and package installation
 
 ## Local Setup
 
-Create a virtual environment and install the package:
+### Using uv (Recommended)
+
+Set up the environment and install dependencies:
+
+```bash
+uv venv
+source .venv/bin/activate
+uv pip install --upgrade pip
+uv pip install torch --index-url https://download.pytorch.org/whl/cpu
+uv pip install -e .
+```
+
+### Traditional pip setup
 
 ```bash
 python -m venv .venv
@@ -37,7 +50,14 @@ Download the corpus (Baleen mirror) and build the index:
 
 ```bash
 python scripts/download_wiki17_abstracts.py --source archive --output-dir data/raw/wiki17
-python scripts/build_index.py --collection data/raw/wiki17/collection.tsv --index-root data/index --index-name wiki17_abstracts
+python fix_collection_format.py  # Fix collection format for ColBERT compatibility
+python scripts/build_index.py --collection data/raw/wiki17/collection_fixed.tsv --index-root data/index --index-name wiki17_abstracts
+```
+
+Or use the convenience script:
+
+```bash
+./build_index
 ```
 
 Pass `--source huggingface` if you prefer to pull the corpus via Hugging Face Datasets instead of the Baleen archive.
@@ -116,6 +136,19 @@ To persist the index outside the container, you can mount a volume at `/workspac
    provided `Dockerfile` works out-of-the-box.  Store the Hugging Face token and override
    `ARCHIVE_URL` as needed via Space secrets.
 
+## Utilities
+
+### Collection Format Fixer
+
+The `fix_collection_format.py` utility converts the downloaded Wikipedia collection from the original `text<TAB>title` format to ColBERT's expected `id<TAB>text` format with sequential integer IDs. This fixes a common indexing error where ColBERT expects integer document IDs but finds string identifiers.
+
+### Build Index Script
+
+The `build_index` script provides a convenient one-command process that:
+1. Cleans any existing index data
+2. Runs the collection format fixer
+3. Builds the ColBERT index with optimal settings
+
 ## Project Layout
 
 ```
@@ -124,7 +157,16 @@ dspy_adapter/      DSPy client helper
 scripts/           Dataset download and index build utilities
 Dockerfile         Full pipeline container definition
 pyproject.toml     Python packaging metadata
+fix_collection_format.py  Utility to fix collection format for ColBERT
+build_index       Convenience script for index building
 ```
+
+## Recent Updates
+
+- **Bug Fix**: Fixed collection format compatibility issue with ColBERT indexing
+- **Utility Added**: Added `fix_collection_format.py` to handle format conversion
+- **Build Script**: Added `build_index` convenience script for streamlined workflow
+- **UV Support**: Added support for uv package manager for faster dependency management
 
 ## Roadmap / Next Steps
 
