@@ -6,3 +6,5 @@ __pycache__/
 data/
 workspace/
 .DS_Store
+*.egg-info/
+dist/
